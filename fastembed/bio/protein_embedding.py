@@ -1,8 +1,11 @@
+import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable, Sequence, Type
 
 import numpy as np
+from tokenizers import Tokenizer, pre_tokenizers, processors
+from tokenizers.models import WordLevel
 
 from fastembed.common.model_description import DenseModelDescription, ModelSource
 from fastembed.common.model_management import ModelManagement
@@ -18,84 +21,90 @@ supported_protein_models: list[DenseModelDescription] = [
         description="Protein embeddings, ESM-2 35M parameters, 480 dimensions, 1024 max sequence length",
         license="mit",
         size_in_GB=0.13,
-        sources=ModelSource(hf="facebook/esm2_t12_35M_UR50D"),
+        sources=ModelSource(hf="nleroy917/esm2_t12_35M_UR50D-onnx"),
         model_file="model.onnx",
-        additional_files=["vocab.txt"],
+        additional_files=["tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"],
     ),
 ]
 
 
-class ProteinTokenizer:
+def load_protein_tokenizer(model_dir: Path, max_length: int = 1024) -> Tokenizer:
+    """Load a protein tokenizer from model directory using HuggingFace tokenizers.
+
+    Attempts to load in order:
+    1. tokenizer.json (standard HuggingFace fast tokenizer format)
+    2. Build from vocab.txt (fallback for models without tokenizer.json)
+
+    Args:
+        model_dir: Path to model directory containing tokenizer files
+        max_length: Maximum sequence length (default, can be overridden by config)
+
+    Returns:
+        Configured Tokenizer instance
     """
-    Simple tokenizer for protein sequences using ESM-2 vocabulary.
-    """
+    tokenizer_json_path = model_dir / "tokenizer.json"
+    tokenizer_config_path = model_dir / "tokenizer_config.json"
+    vocab_path = model_dir / "vocab.txt"
 
-    def __init__(self, vocab_path: Path, max_length: int = 1024):
-        self.max_length = max_length
-        self.vocab: dict[str, int] = {}
-        self.id_to_token: dict[int, str] = {}
+    # Try to load tokenizer.json directly (preferred)
+    if tokenizer_json_path.exists():
+        tokenizer = Tokenizer.from_file(str(tokenizer_json_path))
+        # Read max_length from config if available
+        if tokenizer_config_path.exists():
+            with open(tokenizer_config_path) as f:
+                config = json.load(f)
+                config_max_length = config.get("model_max_length", max_length)
+                # Cap at reasonable value (transformers defaults can be huge)
+                if config_max_length <= max_length:
+                    max_length = config_max_length
+        tokenizer.enable_truncation(max_length=max_length)
+        return tokenizer
 
-        with open(vocab_path) as f:
-            for idx, line in enumerate(f):
-                token = line.strip()
-                self.vocab[token] = idx
-                self.id_to_token[idx] = token
+    # Fall back to building from vocab.txt
+    if not vocab_path.exists():
+        raise ValueError(
+            f"Could not find tokenizer.json or vocab.txt in {model_dir}"
+        )
 
-        self.cls_token_id = self.vocab.get("<cls>", 0)
-        self.eos_token_id = self.vocab.get("<eos>", 2)
-        self.pad_token_id = self.vocab.get("<pad>", 1)
-        self.unk_token_id = self.vocab.get("<unk>", 3)
+    # Read max_length from config if available
+    if tokenizer_config_path.exists():
+        with open(tokenizer_config_path) as f:
+            config = json.load(f)
+            max_length = config.get("model_max_length", max_length)
 
-    def encode(self, sequence: str) -> tuple[list[int], list[int]]:
-        """Encode a single protein sequence.
+    vocab: dict[str, int] = {}
+    with open(vocab_path) as f:
+        for idx, line in enumerate(f):
+            token = line.strip()
+            vocab[token] = idx
 
-        Args:
-            sequence: Protein sequence (amino acid string)
+    unk_token = "<unk>"
+    cls_token = "<cls>"
+    eos_token = "<eos>"
+    pad_token = "<pad>"
 
-        Returns:
-            Tuple of (input_ids, attention_mask)
-        """
-        sequence = sequence.upper()
+    tokenizer = Tokenizer(WordLevel(vocab=vocab, unk_token=unk_token))
 
-        input_ids = [self.cls_token_id]
-        for aa in sequence:
-            input_ids.append(self.vocab.get(aa, self.unk_token_id))
-        input_ids.append(self.eos_token_id)
+    tokenizer.pre_tokenizer = pre_tokenizers.Split(
+        pattern="", behavior="isolated", invert=False
+    )
 
-        if len(input_ids) > self.max_length:
-            input_ids = input_ids[: self.max_length]
+    cls_token_id = vocab.get(cls_token, 0)
+    eos_token_id = vocab.get(eos_token, 2)
 
-        attention_mask = [1] * len(input_ids)
+    tokenizer.post_processor = processors.TemplateProcessing(
+        single=f"{cls_token}:0 $A:0 {eos_token}:0",
+        special_tokens=[
+            (cls_token, cls_token_id),
+            (eos_token, eos_token_id),
+        ],
+    )
 
-        return input_ids, attention_mask
+    pad_token_id = vocab.get(pad_token, 1)
+    tokenizer.enable_padding(pad_id=pad_token_id, pad_token=pad_token)
+    tokenizer.enable_truncation(max_length=max_length)
 
-    def encode_batch(
-        self, sequences: list[str]
-    ) -> tuple[list[list[int]], list[list[int]]]:
-        """Encode a batch of protein sequences with padding.
-
-        Args:
-            sequences: List of protein sequences
-
-        Returns:
-            Tuple of (input_ids, attention_masks) with padding
-        """
-        all_input_ids = []
-        all_attention_masks = []
-        max_len = 0
-
-        for seq in sequences:
-            input_ids, attention_mask = self.encode(seq)
-            all_input_ids.append(input_ids)
-            all_attention_masks.append(attention_mask)
-            max_len = max(max_len, len(input_ids))
-
-        for i in range(len(all_input_ids)):
-            padding_length = max_len - len(all_input_ids[i])
-            all_input_ids[i].extend([self.pad_token_id] * padding_length)
-            all_attention_masks[i].extend([0] * padding_length)
-
-        return all_input_ids, all_attention_masks
+    return tokenizer
 
 
 class ProteinEmbeddingBase(ModelManagement[DenseModelDescription]):
@@ -166,7 +175,7 @@ class OnnxProteinModel(OnnxModel[NumpyArray]):
 
     def __init__(self) -> None:
         super().__init__()
-        self.tokenizer: ProteinTokenizer | None = None
+        self.tokenizer: Tokenizer | None = None
 
     def _load_onnx_model(
         self,
@@ -187,10 +196,7 @@ class OnnxProteinModel(OnnxModel[NumpyArray]):
             device_id=device_id,
             extra_session_options=extra_session_options,
         )
-        vocab_path = model_dir / "vocab.txt"
-        if not vocab_path.exists():
-            raise ValueError(f"Could not find vocab.txt in {model_dir}")
-        self.tokenizer = ProteinTokenizer(vocab_path)
+        self.tokenizer = load_protein_tokenizer(model_dir)
 
     def onnx_embed(self, sequences: list[str], **kwargs: Any) -> OnnxOutputContext:
         """
@@ -203,21 +209,24 @@ class OnnxProteinModel(OnnxModel[NumpyArray]):
         """
         assert self.tokenizer is not None
 
-        input_ids, attention_masks = self.tokenizer.encode_batch(sequences)
+        sequences = [seq.upper() for seq in sequences]
+        encoded = self.tokenizer.encode_batch(sequences)
+        input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
+        attention_mask = np.array([e.attention_mask for e in encoded], dtype=np.int64)
 
         input_names = {node.name for node in self.model.get_inputs()}  # type: ignore[union-attr]
         onnx_input: dict[str, NumpyArray] = {
-            "input_ids": np.array(input_ids, dtype=np.int64),
+            "input_ids": input_ids,
         }
         if "attention_mask" in input_names:
-            onnx_input["attention_mask"] = np.array(attention_masks, dtype=np.int64)
+            onnx_input["attention_mask"] = attention_mask
 
         model_output = self.model.run(self.ONNX_OUTPUT_NAMES, onnx_input)  # type: ignore[union-attr]
 
         return OnnxOutputContext(
             model_output=model_output[0],
-            attention_mask=np.array(attention_masks, dtype=np.int64),
-            input_ids=np.array(input_ids, dtype=np.int64),
+            attention_mask=attention_mask,
+            input_ids=input_ids,
         )
 
     def _post_process_onnx_output(
