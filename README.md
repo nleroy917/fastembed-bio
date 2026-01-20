@@ -154,6 +154,25 @@ embeddings = list(model.embed(images))
 # ]
 ```
 
+### 🧬 Protein embeddings
+
+```python
+from fastembed import ProteinEmbedding
+
+sequences = [
+    "MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG",
+    "GKGDPKKPRGKMSSYAFFVQTSREEHKKKHPDASVNFSEFSKKCSERWKTMSAKEKGKFEDMAK",
+]
+
+model = ProteinEmbedding(model_name="facebook/esm2_t12_35M_UR50D")
+embeddings = list(model.embed(sequences))
+
+# [
+#   array([-0.0055, -0.0144,  0.0355, -0.0049, ...], dtype=float32),
+#   array([ 0.0114,  0.0020, -0.0247,  0.0060, ...], dtype=float32)
+# ]
+```
+
 ### Late interaction multimodal models (ColPali)
 
 ```python
