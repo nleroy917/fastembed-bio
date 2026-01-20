@@ -1,170 +1,32 @@
-# ⚡️ What is FastEmbed?
+# fastembed-bio
 
-FastEmbed is a lightweight, fast, Python library built for embedding generation. We [support popular text models](https://qdrant.github.io/fastembed/examples/Supported_Models/). Please [open a GitHub issue](https://github.com/qdrant/fastembed/issues/new) if you want us to add a new model.
+Fast, lightweight biological sequence embeddings using ONNX. Built on [FastEmbed](https://github.com/qdrant/fastembed).
 
-The default text embedding (`TextEmbedding`) model is Flag Embedding, presented in the [MTEB](https://huggingface.co/spaces/mteb/leaderboard) leaderboard. It supports "query" and "passage" prefixes for the input text. Here is an example for [Retrieval Embedding Generation](https://qdrant.github.io/fastembed/qdrant/Retrieval_with_FastEmbed/) and how to use [FastEmbed with Qdrant](https://qdrant.github.io/fastembed/qdrant/Usage_With_Qdrant/).
+## Why fastembed-bio?
 
-## 📈 Why FastEmbed?
+1. **Light**: No GPU required. No PyTorch. Just ONNX Runtime. Perfect for serverless and resource-constrained environments.
 
-1. Light: FastEmbed is a lightweight library with few external dependencies. We don't require a GPU and don't download GBs of PyTorch dependencies, and instead use the ONNX Runtime. This makes it a great candidate for serverless runtimes like AWS Lambda. 
+2. **Fast**: ONNX Runtime is faster than PyTorch inference. Batch processing and parallelism built-in.
 
-2. Fast: FastEmbed is designed for speed. We use the ONNX Runtime, which is faster than PyTorch. We also use data parallelism for encoding large datasets.
+3. **Simple**: Same interface patterns as FastEmbed. If you've used FastEmbed for text, you already know how to use this.
 
-3. Accurate: FastEmbed is better than OpenAI Ada-002. We also [support](https://qdrant.github.io/fastembed/examples/Supported_Models/) an ever-expanding set of models, including a few multilingual models.
-
-## 🚀 Installation
-
-To install the FastEmbed library, pip works best. You can install it with or without GPU support:
+## Installation
 
 ```bash
-pip install fastembed
-
-# or with GPU support
-
-pip install fastembed-gpu
+pip install fastembed-bio
 ```
 
-## 📖 Quickstart
+## Quickstart
 
 ```python
-from fastembed import TextEmbedding
-
-
-# Example list of documents
-documents: list[str] = [
-    "This is built to be faster and lighter than other embedding libraries e.g. Transformers, Sentence-Transformers, etc.",
-    "fastembed is supported by and maintained by Qdrant.",
-]
-
-# This will trigger the model download and initialization
-embedding_model = TextEmbedding()
-print("The model BAAI/bge-small-en-v1.5 is ready to use.")
-
-embeddings_generator = embedding_model.embed(documents)  # reminder this is a generator
-embeddings_list = list(embedding_model.embed(documents))
-  # you can also convert the generator to a list, and that to a numpy array
-len(embeddings_list[0]) # Vector of 384 dimensions
-```
-
-Fastembed supports a variety of models for different tasks and modalities.
-The list of all the available models can be found [here](https://qdrant.github.io/fastembed/examples/Supported_Models/)
-### 🎒 Dense text embeddings
-
-```python
-from fastembed import TextEmbedding
-
-model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-embeddings = list(model.embed(documents))
-
-# [
-#   array([-0.1115,  0.0097,  0.0052,  0.0195, ...], dtype=float32),
-#   array([-0.1019,  0.0635, -0.0332,  0.0522, ...], dtype=float32)
-# ]
-
-```
-
-Dense text embedding can also be extended with models which are not in the list of supported models.
-
-```python
-from fastembed import TextEmbedding
-from fastembed.common.model_description import PoolingType, ModelSource
-
-TextEmbedding.add_custom_model(
-    model="intfloat/multilingual-e5-small",
-    pooling=PoolingType.MEAN,
-    normalization=True,
-    sources=ModelSource(hf="intfloat/multilingual-e5-small"),  # can be used with an `url` to load files from a private storage
-    dim=384,
-    model_file="onnx/model.onnx",  # can be used to load an already supported model with another optimization or quantization, e.g. onnx/model_O4.onnx
-)
-model = TextEmbedding(model_name="intfloat/multilingual-e5-small")
-embeddings = list(model.embed(documents))
-```
-
-
-### 🔱 Sparse text embeddings
-
-* SPLADE++
-
-```python
-from fastembed import SparseTextEmbedding
-
-model = SparseTextEmbedding(model_name="prithivida/Splade_PP_en_v1")
-embeddings = list(model.embed(documents))
-
-# [
-#   SparseEmbedding(indices=[ 17, 123, 919, ... ], values=[0.71, 0.22, 0.39, ...]),
-#   SparseEmbedding(indices=[ 38,  12,  91, ... ], values=[0.11, 0.22, 0.39, ...])
-# ]
-```
-
-<!--
-* BM42 - ([link](ToDo))
-
-```
-from fastembed import SparseTextEmbedding
-
-model = SparseTextEmbedding(model_name="Qdrant/bm42-all-minilm-l6-v2-attentions")
-embeddings = list(model.embed(documents))
-
-# [
-#   SparseEmbedding(indices=[ 17, 123, 919, ... ], values=[0.71, 0.22, 0.39, ...]),
-#   SparseEmbedding(indices=[ 38,  12,  91, ... ], values=[0.11, 0.22, 0.39, ...])
-# ]
-```
--->
-
-### 🦥 Late interaction models (aka ColBERT)
-
-
-```python
-from fastembed import LateInteractionTextEmbedding
-
-model = LateInteractionTextEmbedding(model_name="colbert-ir/colbertv2.0")
-embeddings = list(model.embed(documents))
-
-# [
-#   array([
-#       [-0.1115,  0.0097,  0.0052,  0.0195, ...],
-#       [-0.1019,  0.0635, -0.0332,  0.0522, ...],
-#   ]),
-#   array([
-#       [-0.9019,  0.0335, -0.0032,  0.0991, ...],
-#       [-0.2115,  0.8097,  0.1052,  0.0195, ...],
-#   ]),  
-# ]
-```
-
-### 🖼️ Image embeddings
-
-```python
-from fastembed import ImageEmbedding
-
-images = [
-    "./path/to/image1.jpg",
-    "./path/to/image2.jpg",
-]
-
-model = ImageEmbedding(model_name="Qdrant/clip-ViT-B-32-vision")
-embeddings = list(model.embed(images))
-
-# [
-#   array([-0.1115,  0.0097,  0.0052,  0.0195, ...], dtype=float32),
-#   array([-0.1019,  0.0635, -0.0332,  0.0522, ...], dtype=float32)
-# ]
-```
-
-### 🧬 Protein embeddings
-
-```python
-from fastembed import ProteinEmbedding
+from fastembed.bio import ProteinEmbedding
 
 sequences = [
     "MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG",
     "GKGDPKKPRGKMSSYAFFVQTSREEHKKKHPDASVNFSEFSKKCSERWKTMSAKEKGKFEDMAK",
 ]
 
-model = ProteinEmbedding(model_name="facebook/esm2_t12_35M_UR50D")
+model = ProteinEmbedding("facebook/esm2_t12_35M_UR50D")
 embeddings = list(model.embed(sequences))
 
 # [
@@ -173,128 +35,57 @@ embeddings = list(model.embed(sequences))
 # ]
 ```
 
-### Late interaction multimodal models (ColPali)
+## Supported Models
+
+### Protein Embeddings
+
+| Model | Parameters | Dimensions | Description |
+|-------|------------|------------|-------------|
+| `facebook/esm2_t12_35M_UR50D` | 35M | 480 | ESM-2 protein language model |
 
 ```python
-from fastembed import LateInteractionMultimodalEmbedding
+from fastembed.bio import ProteinEmbedding
 
-doc_images = [
-    "./path/to/qdrant_pdf_doc_1_screenshot.jpg",
-    "./path/to/colpali_pdf_doc_2_screenshot.jpg",
-]
-
-query = "What is Qdrant?"
-
-model = LateInteractionMultimodalEmbedding(model_name="Qdrant/colpali-v1.3-fp16")
-doc_images_embeddings = list(model.embed_image(doc_images))
-# shape (2, 1030, 128)
-# [array([[-0.03353882, -0.02090454, ..., -0.15576172, -0.07678223]], dtype=float32)]
-query_embedding = model.embed_text(query)
-# shape (1, 20, 128)
-# [array([[-0.00218201,  0.14758301, ...,  -0.02207947,  0.16833496]], dtype=float32)]
+model = ProteinEmbedding("facebook/esm2_t12_35M_UR50D")
+embeddings = list(model.embed(["MKTVRQERLKS", "GKGDPKKPRGK"]))
 ```
 
-### 🔄 Rerankers
-```python
-from fastembed.rerank.cross_encoder import TextCrossEncoder
+### DNA Embeddings (Coming Soon)
 
-query = "Who is maintaining Qdrant?"
-documents: list[str] = [
-    "This is built to be faster and lighter than other embedding libraries e.g. Transformers, Sentence-Transformers, etc.",
-    "fastembed is supported by and maintained by Qdrant.",
-]
-encoder = TextCrossEncoder(model_name="Xenova/ms-marco-MiniLM-L-6-v2")
-scores = list(encoder.rerank(query, documents))
+DNABert and similar models for DNA sequence embeddings.
 
-# [-11.48061752319336, 5.472434997558594]
-```
+### RNA Embeddings (Coming Soon)
 
-Text cross encoders can also be extended with models which are not in the list of supported models.
+RNA foundation models for RNA sequence embeddings.
+
+## GPU Support
 
 ```python
-from fastembed.rerank.cross_encoder import TextCrossEncoder 
-from fastembed.common.model_description import ModelSource
+from fastembed.bio import ProteinEmbedding
 
-TextCrossEncoder.add_custom_model(
-    model="Xenova/ms-marco-MiniLM-L-4-v2",
-    model_file="onnx/model.onnx",
-    sources=ModelSource(hf="Xenova/ms-marco-MiniLM-L-4-v2"),
-)
-model = TextCrossEncoder(model_name="Xenova/ms-marco-MiniLM-L-4-v2")
-scores = list(model.rerank_pairs(
-    [("What is AI?", "Artificial intelligence is ..."), ("What is ML?", "Machine learning is ..."),]
-))
-```
-
-## ⚡️ FastEmbed on a GPU
-
-FastEmbed supports running on GPU devices.
-It requires installation of the `fastembed-gpu` package.
-
-```bash
-pip install fastembed-gpu
-```
-
-Check our [example](https://qdrant.github.io/fastembed/examples/FastEmbed_GPU/) for detailed instructions, CUDA 12.x support and troubleshooting of the common issues.
-
-```python
-from fastembed import TextEmbedding
-
-embedding_model = TextEmbedding(
-    model_name="BAAI/bge-small-en-v1.5", 
+model = ProteinEmbedding(
+    "facebook/esm2_t12_35M_UR50D",
     providers=["CUDAExecutionProvider"]
 )
-print("The model BAAI/bge-small-en-v1.5 is ready to use on a GPU.")
-
 ```
 
-## Usage with Qdrant
+Requires `onnxruntime-gpu` instead of `onnxruntime`.
 
-Installation with Qdrant Client in Python:
+## Relationship to FastEmbed
 
-```bash
-pip install qdrant-client[fastembed]
-```
+This project is a community-driven fork of [FastEmbed](https://github.com/qdrant/fastembed) focused on biological sequence embeddings. It uses the same core infrastructure (ONNX models, model management, etc.) but is specialized for proteins, DNA, and RNA.
 
-or 
+The goal is to make biological embeddings as accessible and efficient as text embeddings.
 
-```bash
-pip install qdrant-client[fastembed-gpu]
-```
+## Contributing
 
-You might have to use quotes ```pip install 'qdrant-client[fastembed]'``` on zsh.
+Contributions welcome! Areas of interest:
 
-```python
-from qdrant_client import QdrantClient, models
+- Additional ESM-2 model sizes
+- DNABert and other DNA models
+- RNA foundation models
+- Performance optimizations
 
-# Initialize the client
-client = QdrantClient("localhost", port=6333) # For production
-# client = QdrantClient(":memory:") # For experimentation
+## License
 
-model_name = "sentence-transformers/all-MiniLM-L6-v2"
-payload = [
-    {"document": "Qdrant has Langchain integrations", "source": "Langchain-docs", },
-    {"document": "Qdrant also has Llama Index integrations", "source": "LlamaIndex-docs"},
-]
-docs = [models.Document(text=data["document"], model=model_name) for data in payload]
-ids = [42, 2]
-
-client.create_collection(
-    "demo_collection",
-    vectors_config=models.VectorParams(
-        size=client.get_embedding_size(model_name), distance=models.Distance.COSINE)
-)
-
-client.upload_collection(
-    collection_name="demo_collection",
-    vectors=docs,
-    ids=ids,
-    payload=payload,
-)
-
-search_result = client.query_points(
-    collection_name="demo_collection",
-    query=models.Document(text="This is a query document", model=model_name)
-).points
-print(search_result)
-```
+Apache 2.0
