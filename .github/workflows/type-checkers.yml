@@ -28,7 +28,7 @@ jobs:
 
       - name: mypy
         run: |
-            poetry run mypy fastembed \
+            poetry run mypy fastembed_bio \
               --disallow-incomplete-defs \
               --disallow-untyped-defs \
               --disable-error-code=import-untyped
