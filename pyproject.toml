@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fastembed-bio"
-version = "0.1.1"
+version = "0.1.2"
 description = "Fast, light, accurate library for biological sequence embeddings (proteins, DNA, RNA)"
 authors = ["Nathan LeRoy <nathanjleroy@gmail.com>"]
 license = "Apache License"
