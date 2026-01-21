@@ -366,7 +366,7 @@ class ProteinEmbedding(ProteinEmbeddingBase):
     Protein sequence embedding using ESM-2 and similar models.
 
     Example:
-        >>> from fastembed.bio import ProteinEmbedding
+        >>> from fastembed_bio.bio import ProteinEmbedding
         >>> model = ProteinEmbedding("facebook/esm2_t12_35M_UR50D")
         >>> embeddings = list(model.embed(["MKTVRQERLKS", "GKGDPKKPRGKM"]))
         >>> print(embeddings[0].shape)

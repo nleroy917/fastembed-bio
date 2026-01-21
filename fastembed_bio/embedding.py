@@ -6,7 +6,7 @@ from fastembed_bio import TextEmbedding
 
 logger.warning(
     "DefaultEmbedding, FlagEmbedding, JinaEmbedding are deprecated."
-    "Use from fastembed import TextEmbedding instead."
+    "Use from fastembed_bio import TextEmbedding instead."
 )
 
 DefaultEmbedding = TextEmbedding
