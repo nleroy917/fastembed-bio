@@ -17,7 +17,7 @@ from huggingface_hub.utils import (
 )
 from loguru import logger
 from tqdm import tqdm
-from fastembed.common.model_description import BaseModelDescription
+from fastembed_bio.common.model_description import BaseModelDescription
 
 T = TypeVar("T", bound=BaseModelDescription)
 

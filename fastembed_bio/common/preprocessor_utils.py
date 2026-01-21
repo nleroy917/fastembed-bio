@@ -4,8 +4,6 @@ from pathlib import Path
 
 from tokenizers import AddedToken, Tokenizer
 
-from fastembed.image.transform.operators import Compose
-
 
 def load_special_tokens(model_dir: Path) -> dict[str, Any]:
     tokens_map_path = model_dir / "special_tokens_map.json"
@@ -72,13 +70,3 @@ def load_tokenizer(model_dir: Path) -> tuple[Tokenizer, dict[str, int]]:
 
     return tokenizer, special_token_to_id
 
-
-def load_preprocessor(model_dir: Path) -> Compose:
-    preprocessor_config_path = model_dir / "preprocessor_config.json"
-    if not preprocessor_config_path.exists():
-        raise ValueError(f"Could not find preprocessor_config.json in {model_dir}")
-
-    with open(str(preprocessor_config_path)) as preprocessor_config_file:
-        preprocessor_config = json.load(preprocessor_config_file)
-        transforms = Compose.from_config(preprocessor_config)
-    return transforms

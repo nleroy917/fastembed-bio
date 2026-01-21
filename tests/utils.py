@@ -5,7 +5,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Callable, Any, Type
 
-from fastembed.common.model_description import BaseModelDescription
+from fastembed_bio.common.model_description import BaseModelDescription
 
 
 def delete_model_cache(model_dir: str | Path) -> None:

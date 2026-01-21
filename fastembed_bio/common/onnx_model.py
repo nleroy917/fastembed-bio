@@ -9,8 +9,8 @@ import onnxruntime as ort
 from numpy.typing import NDArray
 from tokenizers import Tokenizer
 
-from fastembed.common.types import OnnxProvider, NumpyArray, Device
-from fastembed.parallel_processor import Worker
+from fastembed_bio.common.types import OnnxProvider, NumpyArray, Device
+from fastembed_bio.parallel_processor import Worker
 
 # Holds type of the embedding result
 T = TypeVar("T")
