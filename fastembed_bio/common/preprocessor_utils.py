@@ -4,7 +4,7 @@ from pathlib import Path
 
 from tokenizers import AddedToken, Tokenizer
 
-from fastembed.image.transform.operators import Compose
+from fastembed_bio.image.transform.operators import Compose
 
 
 def load_special_tokens(model_dir: Path) -> dict[str, Any]:

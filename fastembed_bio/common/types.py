@@ -4,7 +4,7 @@ from typing import Any, TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
-from PIL import Image
+
 
 
 class Device(str, Enum):
@@ -14,7 +14,6 @@ class Device(str, Enum):
 
 
 PathInput: TypeAlias = str | Path
-ImageInput: TypeAlias = PathInput | Image.Image
 
 OnnxProvider: TypeAlias = str | tuple[str, dict[Any, Any]]
 NumpyArray: TypeAlias = (

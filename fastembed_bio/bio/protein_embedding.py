@@ -7,11 +7,11 @@ import numpy as np
 from tokenizers import Tokenizer, pre_tokenizers, processors
 from tokenizers.models import WordLevel
 
-from fastembed.common.model_description import DenseModelDescription, ModelSource
-from fastembed.common.model_management import ModelManagement
-from fastembed.common.onnx_model import OnnxModel, OnnxOutputContext, EmbeddingWorker
-from fastembed.common.types import NumpyArray, OnnxProvider, Device
-from fastembed.common.utils import define_cache_dir, iter_batch, normalize
+from fastembed_bio.common.model_description import DenseModelDescription, ModelSource
+from fastembed_bio.common.model_management import ModelManagement
+from fastembed_bio.common.onnx_model import OnnxModel, OnnxOutputContext, EmbeddingWorker
+from fastembed_bio.common.types import NumpyArray, OnnxProvider, Device
+from fastembed_bio.common.utils import define_cache_dir, iter_batch, normalize
 
 
 supported_protein_models: list[DenseModelDescription] = [

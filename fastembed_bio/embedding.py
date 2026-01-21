@@ -2,7 +2,7 @@ from typing import Any
 
 from loguru import logger
 
-from fastembed import TextEmbedding
+from fastembed_bio import TextEmbedding
 
 logger.warning(
     "DefaultEmbedding, FlagEmbedding, JinaEmbedding are deprecated."

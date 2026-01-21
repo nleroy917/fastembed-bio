@@ -10,7 +10,7 @@ from typing import Iterable, TypeVar
 import numpy as np
 from numpy.typing import NDArray
 
-from fastembed.common.types import NumpyArray
+from fastembed_bio.common.types import NumpyArray
 
 T = TypeVar("T")
 

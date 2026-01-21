@@ -10,7 +10,7 @@ from multiprocessing.sharedctypes import Synchronized as BaseValue
 from queue import Empty
 from typing import Any, Iterable, Type
 
-from fastembed.common.types import Device
+from fastembed_bio.common.types import Device
 
 # Single item should be processed in less than:
 processing_timeout = 10 * 60  # seconds

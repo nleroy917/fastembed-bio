@@ -1,6 +1,6 @@
 import importlib.metadata
 
-from fastembed.bio import ProteinEmbedding
+from fastembed_bio.bio import ProteinEmbedding
 
 try:
     version = importlib.metadata.version("fastembed-bio")
