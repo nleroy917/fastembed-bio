@@ -53,6 +53,8 @@ mknotebooks = "^0.8.0"
 [tool.poetry.group.types.dependencies]
 pyright = ">=1.1.293"
 mypy = "^1.0.0"
+types-requests = "^2.31"
+types-tqdm = "^4.66"
 
 [build-system]
 requires = ["poetry-core"]
@@ -60,6 +62,9 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pyright]
 typeCheckingMode = "strict"
+
+[tool.mypy]
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 99
