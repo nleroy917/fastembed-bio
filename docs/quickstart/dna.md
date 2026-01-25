@@ -4,81 +4,30 @@ icon: lucide/dna
 
 # DNA Embedding Quickstart
 
-Generate embeddings for DNA sequences using foundation models like GROVER and Nucleotide Transformer v3.
-
-## Available Models
-
-| Model | Dimensions | Species Conditioning |
-|-------|------------|---------------------|
-| `PoetschLab/GROVER` | 768 | No |
-| `InstaDeepAI/NTv3_650M_post` | 1536 | Yes |
+Generate embeddings for DNA sequences using the GROVER foundation model.
 
 ## Basic Usage
 
 ```python
 from fastembed_bio import DNAEmbedding
 
-# GROVER - simple, no species needed
+# Initialize the model (downloads on first use)
 model = DNAEmbedding("PoetschLab/GROVER")
-embeddings = list(model.embed(["ATCGATCGATCGATCG", "GCTAGCTAGCTAGCTA"]))
+
+# Embed sequences
+sequences = ["ATCGATCGATCGATCG", "GCTAGCTAGCTAGCTA"]
+embeddings = list(model.embed(sequences))
+
 print(f"Shape: {embeddings[0].shape}")  # (768,)
-
-# NTv3 - species-conditioned
-model = DNAEmbedding("InstaDeepAI/NTv3_650M_post")
-embeddings = list(model.embed(["ATCGATCGATCGATCG"], species="human"))
-print(f"Shape: {embeddings[0].shape}")  # (1536,)
 ```
 
-## Species-Conditioned Embeddings (NTv3)
+## Single Sequence
 
-The NTv3 model supports species conditioning, which improves embedding quality for sequences from specific organisms. GROVER does not use species conditioning.
-
-### Default Species
-
-For NTv3, all sequences use `species="human"` by default:
+You can pass a single sequence as a string:
 
 ```python
-# These are equivalent
-embeddings = list(model.embed(["ATCGATCG"]))
-embeddings = list(model.embed(["ATCGATCG"], species="human"))
-```
-
-### Per-Sequence Species
-
-Use `DNAInput` to specify species for each sequence individually:
-
-```python
-from fastembed_bio import DNAEmbedding, DNAInput
-
-model = DNAEmbedding("InstaDeepAI/NTv3_650M_post")
-
-# Different species for each sequence
-inputs = [
-    DNAInput("ATCGATCGATCG", species="human"),
-    DNAInput("GCTAGCTAGCTA", species="mouse"),
-    DNAInput("NNNNNNNNNNNN", species="zebrafish"),
-]
-
-embeddings = list(model.embed(inputs))
-```
-
-### Mixed Inputs
-
-You can mix plain strings and `DNAInput` objects:
-
-```python
-inputs = [
-    "ATCGATCG",  # Uses default species (human)
-    DNAInput("GCTAGCTA", species="mouse"),
-]
-embeddings = list(model.embed(inputs))
-```
-
-### List Supported Species
-
-```python
-species = model.list_supported_species()
-print(species)  # ['human', 'mouse', 'zebrafish', ...]
+embedding = list(model.embed("ATCGATCGATCGATCG"))
+print(len(embedding))  # 1
 ```
 
 ## Batch Processing
@@ -99,7 +48,7 @@ Defer model loading until first use:
 
 ```python
 # Model files are downloaded but not loaded into memory
-model = DNAEmbedding("InstaDeepAI/NTv3_650M_post", lazy_load=True)
+model = DNAEmbedding("PoetschLab/GROVER", lazy_load=True)
 
 # Model loads here on first embed call
 embeddings = list(model.embed(["ATCGATCG"]))
@@ -117,10 +66,24 @@ for m in models:
 
 ```python
 # Without loading the model
-dim = DNAEmbedding.get_embedding_size("InstaDeepAI/NTv3_650M_post")
-print(dim)  # 1536
+dim = DNAEmbedding.get_embedding_size("PoetschLab/GROVER")
+print(dim)  # 768
 
 # From an instance
-model = DNAEmbedding("InstaDeepAI/NTv3_650M_post")
-print(model.embedding_size)  # 1536
+model = DNAEmbedding("PoetschLab/GROVER")
+print(model.embedding_size)  # 768
 ```
+
+## Embeddings are Normalized
+
+All embeddings are L2-normalized (unit length):
+
+```python
+import numpy as np
+
+embeddings = list(model.embed(["ATCGATCG"]))
+norm = np.linalg.norm(embeddings[0])
+print(f"L2 norm: {norm:.4f}")  # ~1.0000
+```
+
+This makes them ready for cosine similarity comparisons or use with vector databases.

@@ -18,7 +18,7 @@ pip install fastembed-bio
 from fastembed_bio import DNAEmbedding, ProteinEmbedding
 
 # DNA embeddings
-dna_model = DNAEmbedding("InstaDeepAI/NTv3_650M_post")
+dna_model = DNAEmbedding("PoetschLab/GROVER")
 dna_embeddings = list(dna_model.embed(["ATCGATCGATCG", "GCTAGCTAGCTA"]))
 
 # Protein embeddings
@@ -39,7 +39,6 @@ protein_embeddings = list(protein_model.embed(["MKTVRQERLKS", "GKGDPKKPRGKM"]))
 
 | Model | Dimensions | Description |
 |-------|------------|-------------|
-| `InstaDeepAI/NTv3_650M_post` | 1536 | Nucleotide Transformer v3, species-conditioned |
 | `PoetschLab/GROVER` | 768 | GROVER DNA foundation model |
 
 ### Protein Embeddings
@@ -52,3 +51,27 @@ protein_embeddings = list(protein_model.embed(["MKTVRQERLKS", "GKGDPKKPRGKM"]))
 
 - [DNA Embedding Quickstart](quickstart/dna.md) - Get started with DNA sequence embeddings
 - [Protein Embedding Quickstart](quickstart/protein.md) - Get started with protein sequence embeddings
+
+## Roadmap
+
+I'm actively expanding fastembed-bio. Here's where my mind is at for future model support:
+
+### DNA/RNA Models
+- [ ] Nucleotide Transformer v3 (species-conditioned embeddings)
+- [ ] Hyena DNA
+- [ ] Additional GROVER variants
+
+### Protein Models
+- [ ] ESM-2 larger variants (150M, 650M)
+- [ ] ESMFold embeddings
+
+### Single-Cell Models
+- [ ] Geneformer (scRNA-seq)
+- [ ] scGPT
+- [ ] Tahoe-x1
+
+### Other Modalities
+- [ ] ATAC-seq embeddings (Atacformer)
+- [ ] Multi-modal embeddings
+
+Want to contribute? Check out our [GitHub repository](https://github.com/nleroy917/fastembed-bio)!
