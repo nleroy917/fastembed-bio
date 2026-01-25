@@ -51,6 +51,7 @@ nav = [
     { "DNA Embeddings" = "quickstart/dna.md" },
     { "Protein Embeddings" = "quickstart/protein.md" },
   ]},
+  { "Contributing" = "contributing.md" },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
