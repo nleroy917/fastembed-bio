@@ -29,7 +29,8 @@ supported_protein_models: list[DenseModelDescription] = [
 
 
 def load_protein_tokenizer(model_dir: Path, max_length: int = 1024) -> Tokenizer:
-    """Load a protein tokenizer from model directory using HuggingFace tokenizers.
+    """
+    Load a protein tokenizer from model directory using HuggingFace tokenizers.
 
     Attempts to load in order:
     1. tokenizer.json (standard HuggingFace fast tokenizer format)

@@ -56,7 +56,7 @@ def load_nucleotide_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokeni
     tokenizer_config_path = model_dir / "tokenizer_config.json"
     vocab_json_path = model_dir / "vocab.json"
 
-    # Try to load tokenizer.json directly (preferred)
+    # try to load tokenizer.json directly (preferred)
     if tokenizer_json_path.exists():
         tokenizer = Tokenizer.from_file(str(tokenizer_json_path))
         if tokenizer_config_path.exists():
@@ -69,7 +69,7 @@ def load_nucleotide_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokeni
         tokenizer.enable_padding(pad_id=1, pad_token="<pad>", pad_to_multiple_of=128)
         return tokenizer
 
-    # Fall back to building from vocab.json (NTv3 style)
+    # fall back to building from vocab.json (NTv3 style)
     if not vocab_json_path.exists():
         raise ValueError(
             f"Could not find tokenizer.json or vocab.json in {model_dir}"
@@ -78,18 +78,18 @@ def load_nucleotide_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokeni
     with open(vocab_json_path) as f:
         vocab: dict[str, int] = json.load(f)
 
-    # Build tokenizer from vocab
+    # build tokenizer from vocab
     unk_token = "<unk>"
     pad_token = "<pad>"
 
     tokenizer = Tokenizer(WordLevel(vocab=vocab, unk_token=unk_token))
 
-    # Character-level pre-tokenizer (split each character)
+    # character-level pre-tokenizer (split each character)
     tokenizer.pre_tokenizer = pre_tokenizers.Split(
         pattern="", behavior="isolated", invert=False
     )
 
-    # No special tokens added for NTv3 (add_special_tokens=False in original)
+    # no special tokens added for NTv3 (add_special_tokens=False in original)
     pad_token_id = vocab.get(pad_token, 1)
     tokenizer.enable_padding(
         pad_id=pad_token_id, pad_token=pad_token, pad_to_multiple_of=128
@@ -118,7 +118,9 @@ def load_species_config(model_dir: Path) -> dict[str, Any]:
 
 
 class NucleotideEmbeddingBase(ModelManagement[DenseModelDescription]):
-    """Base class for nucleotide sequence embeddings."""
+    """
+    Base class for nucleotide sequence embeddings.
+    """
 
     def __init__(
         self,
@@ -172,7 +174,9 @@ class NucleotideEmbeddingBase(ModelManagement[DenseModelDescription]):
 
     @property
     def embedding_size(self) -> int:
-        """Returns embedding size for the current model."""
+        """
+        Returns embedding size for the current model.
+        """
         if self._embedding_size is None:
             self._embedding_size = self.get_embedding_size(self.model_name)
         return self._embedding_size
@@ -188,7 +192,9 @@ class NucleotideEmbeddingBase(ModelManagement[DenseModelDescription]):
 
 
 class OnnxNucleotideModel(OnnxModel[NumpyArray]):
-    """ONNX model handler for nucleotide embeddings."""
+    """
+    ONNX model handler for nucleotide embeddings.
+    """
 
     ONNX_OUTPUT_NAMES: list[str] | None = None
     # NTv3 model uses special tokens offset for species IDs
@@ -242,7 +248,7 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
             )
 
         base_id = species_to_id[species]
-        # Add special token offset to get actual model species ID
+        # add special token offset to get actual model species ID
         return base_id + self.NUM_SPECIES_SPECIAL_TOKENS
 
     def onnx_embed(
@@ -260,10 +266,10 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
         """
         assert self.tokenizer is not None
 
-        # Normalize sequences to uppercase
+        # normalize sequences to uppercase
         sequences = [seq.upper() for seq in sequences]
 
-        # Tokenize
+        # tokenize
         encoded = self.tokenizer.encode_batch(sequences)
         input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
         attention_mask = np.array([e.attention_mask for e in encoded], dtype=np.int64)
@@ -307,7 +313,9 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
 
 
 class OnnxNucleotideEmbedding(NucleotideEmbeddingBase, OnnxNucleotideModel):
-    """ONNX-based nucleotide embedding implementation."""
+    """
+    ONNX-based nucleotide embedding implementation.
+    """
 
     @classmethod
     def _list_supported_models(cls) -> list[DenseModelDescription]:
