@@ -2,7 +2,7 @@
 name = "fastembed-bio"
 version = "0.1.2"
 description = "Fast, light, accurate library for biological sequence embeddings (proteins, DNA, RNA)"
-authors = ["Nathan LeRoy <nathanjleroy@gmail.com>"]
+authors = ["Nathan LeRoy <nleroy917@gmail.com>"]
 license = "Apache License"
 readme = "README.md"
 packages = [{include = "fastembed_bio"}]

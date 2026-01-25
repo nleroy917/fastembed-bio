@@ -1,6 +1,8 @@
 import importlib.metadata
 
-from fastembed_bio.bio import NucleotideEmbedding, ProteinEmbedding
+from fastembed_bio.common import DNAInput, ProteinInput
+from fastembed_bio.dna import DNAEmbedding
+from fastembed_bio.protein import ProteinEmbedding
 
 try:
     version = importlib.metadata.version("fastembed-bio")
@@ -9,6 +11,8 @@ except importlib.metadata.PackageNotFoundError:
 
 __version__ = version
 __all__ = [
-    "NucleotideEmbedding",
+    "DNAEmbedding",
+    "DNAInput",
     "ProteinEmbedding",
+    "ProteinInput",
 ]

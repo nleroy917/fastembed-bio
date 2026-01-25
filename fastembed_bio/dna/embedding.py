@@ -6,14 +6,58 @@ from typing import Any, Iterable, Sequence, Type
 import numpy as np
 from tokenizers import Tokenizer
 
+from fastembed_bio.common.inputs import DNAInput
 from fastembed_bio.common.model_description import DenseModelDescription, ModelSource
 from fastembed_bio.common.model_management import ModelManagement
 from fastembed_bio.common.onnx_model import EmbeddingWorker, OnnxModel, OnnxOutputContext
 from fastembed_bio.common.types import Device, NumpyArray, OnnxProvider
 from fastembed_bio.common.utils import define_cache_dir, iter_batch, normalize
 
+# type alias for inputs that can be either strings or DNAInput objects
+DNAInputType = str | DNAInput
 
-supported_nucleotide_models: list[DenseModelDescription] = [
+
+def _normalize_dna_inputs(
+    inputs: DNAInputType | Iterable[DNAInputType],
+    default_species: str = "human",
+) -> tuple[list[str], list[str]]:
+    """
+    Normalize DNA inputs to lists of sequences and species.
+
+    Handles mixed inputs of strings and DNAInput objects. Strings use
+    the default_species, DNAInput objects use their own species.
+
+    Args:
+        inputs: Single input or iterable of inputs (str or DNAInput)
+        default_species: Species to use for plain string inputs
+
+    Returns:
+        Tuple of (sequences, species) lists, same length
+    """
+    if isinstance(inputs, str):
+        return [inputs], [default_species]
+    if isinstance(inputs, DNAInput):
+        return [inputs.sequence], [inputs.species]
+
+    sequences: list[str] = []
+    species_list: list[str] = []
+
+    for inp in inputs:
+        if isinstance(inp, str):
+            sequences.append(inp)
+            species_list.append(default_species)
+        elif isinstance(inp, DNAInput):
+            sequences.append(inp.sequence)
+            species_list.append(inp.species)
+        else:
+            raise TypeError(
+                f"Expected str or DNAInput, got {type(inp).__name__}"
+            )
+
+    return sequences, species_list
+
+
+supported_dna_models: list[DenseModelDescription] = [
     DenseModelDescription(
         model="InstaDeepAI/NTv3_650M_post",
         dim=1536,
@@ -34,9 +78,9 @@ supported_nucleotide_models: list[DenseModelDescription] = [
 ]
 
 
-def load_nucleotide_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokenizer:
+def load_dna_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokenizer:
     """
-    Load a nucleotide tokenizer from model directory.
+    Load a DNA tokenizer from model directory.
 
     Attempts to load in order:
     1. tokenizer.json (standard HuggingFace fast tokenizer format)
@@ -117,9 +161,9 @@ def load_species_config(model_dir: Path) -> dict[str, Any]:
         return json.load(f)
 
 
-class NucleotideEmbeddingBase(ModelManagement[DenseModelDescription]):
+class DNAEmbeddingBase(ModelManagement[DenseModelDescription]):
     """
-    Base class for nucleotide sequence embeddings.
+    Base class for DNA sequence embeddings.
     """
 
     def __init__(
@@ -137,23 +181,40 @@ class NucleotideEmbeddingBase(ModelManagement[DenseModelDescription]):
 
     def embed(
         self,
-        sequences: str | Iterable[str],
+        inputs: DNAInputType | Iterable[DNAInputType],
         batch_size: int = 32,
         parallel: int | None = None,
         species: str = "human",
         **kwargs: Any,
     ) -> Iterable[NumpyArray]:
         """
-        Embed nucleotide (DNA) sequences.
+        Embed DNA sequences.
 
         Args:
-            sequences: Single DNA sequence or iterable of sequences
+            inputs: DNA input(s). Can be:
+                - A single sequence string
+                - A DNAInput object with sequence and species
+                - An iterable of strings and/or DNAInput objects
             batch_size: Batch size for encoding
             parallel: Number of parallel workers (None for single-threaded)
-            species: Species name for conditioning (default: "human")
+            species: Default species for plain string inputs (default: "human").
+                    Ignored for DNAInput objects which specify their own species.
 
         Yields:
             Embeddings as numpy arrays
+
+        Example:
+            # Simple usage with strings (all use default species)
+            model.embed(["ATCG", "GCTA"])
+
+            # Per-sequence species with DNAInput
+            model.embed([
+                DNAInput("ATCG", species="human"),
+                DNAInput("GCTA", species="mouse"),
+            ])
+
+            # Mixed inputs
+            model.embed(["ATCG", DNAInput("GCTA", species="mouse")])
         """
         raise NotImplementedError()
 
@@ -191,9 +252,9 @@ class NucleotideEmbeddingBase(ModelManagement[DenseModelDescription]):
         raise NotImplementedError()
 
 
-class OnnxNucleotideModel(OnnxModel[NumpyArray]):
+class OnnxDNAModel(OnnxModel[NumpyArray]):
     """
-    ONNX model handler for nucleotide embeddings.
+    ONNX model handler for DNA embeddings.
     """
 
     ONNX_OUTPUT_NAMES: list[str] | None = None
@@ -225,7 +286,7 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
             device_id=device_id,
             extra_session_options=extra_session_options,
         )
-        self.tokenizer = load_nucleotide_tokenizer(model_dir)
+        self.tokenizer = load_dna_tokenizer(model_dir)
         self.species_config = load_species_config(model_dir)
 
     def _get_species_id(self, species: str) -> int:
@@ -252,14 +313,18 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
         return base_id + self.NUM_SPECIES_SPECIAL_TOKENS
 
     def onnx_embed(
-        self, sequences: list[str], species: str = "human", **kwargs: Any
+        self,
+        sequences: list[str],
+        species_list: list[str] | None = None,
+        **kwargs: Any,
     ) -> OnnxOutputContext:
         """
-        Run ONNX inference on nucleotide sequences.
+        Run ONNX inference on DNA sequences.
 
         Args:
             sequences: List of DNA sequences (A, T, C, G, N characters)
-            species: Species name for conditioning
+            species_list: List of species names, one per sequence. If None,
+                         defaults to "human" for all sequences.
 
         Returns:
             OnnxOutputContext containing model output and inputs
@@ -269,15 +334,25 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
         # normalize sequences to uppercase
         sequences = [seq.upper() for seq in sequences]
 
+        # default species list if not provided
+        if species_list is None:
+            species_list = ["human"] * len(sequences)
+
+        if len(species_list) != len(sequences):
+            raise ValueError(
+                f"species_list length ({len(species_list)}) must match "
+                f"sequences length ({len(sequences)})"
+            )
+
         # tokenize
         encoded = self.tokenizer.encode_batch(sequences)
         input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
         attention_mask = np.array([e.attention_mask for e in encoded], dtype=np.int64)
 
-        # Get species IDs for the batch
-        species_id = self._get_species_id(species)
-        batch_size = len(sequences)
-        species_ids = np.full((batch_size,), species_id, dtype=np.int64)
+        # get species IDs for each sequence
+        species_ids = np.array(
+            [self._get_species_id(sp) for sp in species_list], dtype=np.int64
+        )
 
         onnx_input: dict[str, NumpyArray] = {
             "input_ids": input_ids,
@@ -312,14 +387,14 @@ class OnnxNucleotideModel(OnnxModel[NumpyArray]):
         return normalize(mean_embeddings)
 
 
-class OnnxNucleotideEmbedding(NucleotideEmbeddingBase, OnnxNucleotideModel):
+class OnnxDNAEmbedding(DNAEmbeddingBase, OnnxDNAModel):
     """
-    ONNX-based nucleotide embedding implementation.
+    ONNX-based DNA embedding implementation.
     """
 
     @classmethod
     def _list_supported_models(cls) -> list[DenseModelDescription]:
-        return supported_nucleotide_models
+        return supported_dna_models
 
     def __init__(
         self,
@@ -373,33 +448,42 @@ class OnnxNucleotideEmbedding(NucleotideEmbeddingBase, OnnxNucleotideModel):
 
     def embed(
         self,
-        sequences: str | Iterable[str],
+        inputs: DNAInputType | Iterable[DNAInputType],
         batch_size: int = 32,
         parallel: int | None = None,
         species: str = "human",
         **kwargs: Any,
     ) -> Iterable[NumpyArray]:
         """
-        Embed nucleotide (DNA) sequences.
+        Embed DNA sequences.
 
         Args:
-            sequences: Single DNA sequence or iterable of sequences (A, T, C, G, N)
+            inputs: DNA input(s). Can be:
+                - A single sequence string
+                - A DNAInput object with sequence and species
+                - An iterable of strings and/or DNAInput objects
             batch_size: Batch size for encoding
             parallel: Number of parallel workers (not yet supported)
-            species: Species name for conditioning (default: "human")
+            species: Default species for plain string inputs (default: "human").
+                    Ignored for DNAInput objects which specify their own species.
 
         Yields:
             Embeddings as numpy arrays, one per sequence
         """
-        if isinstance(sequences, str):
-            sequences = [sequences]
+        # normalize inputs to sequences and species lists
+        sequences, species_list = _normalize_dna_inputs(inputs, default_species=species)
 
         if not hasattr(self, "model") or self.model is None:
             self.load_onnx_model()
 
-        for batch in iter_batch(sequences, batch_size):
+        # batch sequences and species together
+        seq_species_pairs = list(zip(sequences, species_list))
+        for batch in iter_batch(seq_species_pairs, batch_size):
+            batch_seqs = [pair[0] for pair in batch]
+            batch_species = [pair[1] for pair in batch]
             yield from self._post_process_onnx_output(
-                self.onnx_embed(batch, species=species, **kwargs), **kwargs
+                self.onnx_embed(batch_seqs, species_list=batch_species, **kwargs),
+                **kwargs,
             )
 
     def list_supported_species(self) -> list[str]:
@@ -412,20 +496,20 @@ class OnnxNucleotideEmbedding(NucleotideEmbeddingBase, OnnxNucleotideModel):
         return self.species_config.get("supported_species", [])
 
     @classmethod
-    def _get_worker_class(cls) -> Type["NucleotideEmbeddingWorker"]:
-        return NucleotideEmbeddingWorker
+    def _get_worker_class(cls) -> Type["DNAEmbeddingWorker"]:
+        return DNAEmbeddingWorker
 
 
-class NucleotideEmbeddingWorker(EmbeddingWorker[NumpyArray]):
-    """Worker class for parallel nucleotide embedding processing."""
+class DNAEmbeddingWorker(EmbeddingWorker[NumpyArray]):
+    """Worker class for parallel DNA embedding processing."""
 
     def init_embedding(
         self,
         model_name: str,
         cache_dir: str,
         **kwargs: Any,
-    ) -> OnnxNucleotideEmbedding:
-        return OnnxNucleotideEmbedding(
+    ) -> OnnxDNAEmbedding:
+        return OnnxDNAEmbedding(
             model_name=model_name,
             cache_dir=cache_dir,
             threads=1,
@@ -440,22 +524,30 @@ class NucleotideEmbeddingWorker(EmbeddingWorker[NumpyArray]):
             yield idx, onnx_output
 
 
-class NucleotideEmbedding(NucleotideEmbeddingBase):
+class DNAEmbedding(DNAEmbeddingBase):
     """
-    Nucleotide (DNA) sequence embedding using Nucleotide Transformer v3 and similar models.
+    DNA sequence embedding using Nucleotide Transformer v3 and similar models.
 
     Example:
-        >>> from fastembed_bio import NucleotideEmbedding
-        >>> model = NucleotideEmbedding("InstaDeepAI/NTv3_650M_post")
-        >>> embeddings = list(model.embed(["ATCGATCGATCG", "GCTAGCTAGCTA"], species="human"))
+        >>> from fastembed_bio import DNAEmbedding, DNAInput
+        >>> model = DNAEmbedding("InstaDeepAI/NTv3_650M_post")
+
+        # Simple usage - all sequences use default species ("human")
+        >>> embeddings = list(model.embed(["ATCGATCGATCG", "GCTAGCTAGCTA"]))
         >>> print(embeddings[0].shape)
         (1536,)
+
+        # Per-sequence species with DNAInput
+        >>> embeddings = list(model.embed([
+        ...     DNAInput("ATCGATCGATCG", species="human"),
+        ...     DNAInput("GCTAGCTAGCTA", species="mouse"),
+        ... ]))
 
     The model supports species-conditioned embeddings. Use `list_supported_species()`
     to see available species options.
     """
 
-    EMBEDDINGS_REGISTRY: list[Type[NucleotideEmbeddingBase]] = [OnnxNucleotideEmbedding]
+    EMBEDDINGS_REGISTRY: list[Type[DNAEmbeddingBase]] = [OnnxDNAEmbedding]
 
     @classmethod
     def list_supported_models(cls) -> list[dict[str, Any]]:
@@ -485,7 +577,7 @@ class NucleotideEmbedding(NucleotideEmbeddingBase):
         **kwargs: Any,
     ):
         """
-        Initialize NucleotideEmbedding.
+        Initialize DNAEmbedding.
 
         Args:
             model_name: Name of the model to use
@@ -516,31 +608,45 @@ class NucleotideEmbedding(NucleotideEmbeddingBase):
                 return
 
         raise ValueError(
-            f"Model {model_name} is not supported in NucleotideEmbedding. "
-            "Please check the supported models using `NucleotideEmbedding.list_supported_models()`"
+            f"Model {model_name} is not supported in DNAEmbedding. "
+            "Please check the supported models using `DNAEmbedding.list_supported_models()`"
         )
 
     def embed(
         self,
-        sequences: str | Iterable[str],
+        inputs: DNAInputType | Iterable[DNAInputType],
         batch_size: int = 32,
         parallel: int | None = None,
         species: str = "human",
         **kwargs: Any,
     ) -> Iterable[NumpyArray]:
-        """Embed nucleotide (DNA) sequences.
+        """Embed DNA sequences.
 
         Args:
-            sequences: Single DNA sequence or iterable of sequences (A, T, C, G, N)
+            inputs: DNA input(s). Can be:
+                - A single sequence string
+                - A DNAInput object with sequence and species
+                - An iterable of strings and/or DNAInput objects
             batch_size: Batch size for encoding
             parallel: Number of parallel workers
-            species: Species name for conditioning (default: "human")
+            species: Default species for plain string inputs (default: "human").
+                    Ignored for DNAInput objects which specify their own species.
 
         Yields:
             Embeddings as numpy arrays, one per sequence
+
+        Example:
+            # Simple usage with strings (all use default species)
+            model.embed(["ATCG", "GCTA"])
+
+            # Per-sequence species with DNAInput
+            model.embed([
+                DNAInput("ATCG", species="human"),
+                DNAInput("GCTA", species="mouse"),
+            ])
         """
         yield from self.model.embed(
-            sequences, batch_size, parallel, species=species, **kwargs
+            inputs, batch_size, parallel, species=species, **kwargs
         )
 
     def list_supported_species(self) -> list[str]:
