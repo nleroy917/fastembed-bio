@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pytest
 
-from fastembed_bio.bio import ProteinEmbedding
+from fastembed_bio import ProteinEmbedding
 from tests.utils import delete_model_cache
 
 

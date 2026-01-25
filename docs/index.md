@@ -1,75 +1,77 @@
-# ⚡️ What is FastEmbed?
+---
+icon: lucide/dna
+---
 
-FastEmbed is a lightweight, fast, Python library built for embedding generation. We [support popular text models](https://qdrant.github.io/fastembed/examples/Supported_Models/). Please [open a Github issue](https://github.com/qdrant/fastembed/issues/new) if you want us to add a new model.
+# fastembed-bio
 
-1. Light & Fast
-    - Quantized model weights
-    - ONNX Runtime for inference
+Fast, lightweight biological sequence embeddings using ONNX. No PyTorch or GPU required.
 
-2. Accuracy/Recall
-    - Better than OpenAI Ada-002
-    - Default is Flag Embedding, which has shown good results on the [MTEB](https://huggingface.co/spaces/mteb/leaderboard) leaderboard
-    - List of [supported models](https://qdrant.github.io/fastembed/examples/Supported_Models/) - including multilingual models
-
-Here is an example for [Retrieval Embedding Generation](https://qdrant.github.io/fastembed/examples/Retrieval%20with%20FastEmbed/) and how to use [FastEmbed with Qdrant](https://qdrant.github.io/fastembed/examples/Usage_With_Qdrant/).
-
-## 🚀 Installation
-
-To install the FastEmbed library, pip works:
+## Installation
 
 ```bash
-pip install fastembed
+pip install fastembed-bio
 ```
 
-## 📖 Usage
+## Quick Example
 
 ```python
-from fastembed import TextEmbedding
+from fastembed_bio import DNAEmbedding, ProteinEmbedding
 
-documents: list[str] = [
-    "passage: Hello, World!",
-    "query: Hello, World!",
-    "passage: This is an example passage.",
-    "fastembed is supported by and maintained by Qdrant."
-]
-embedding_model = TextEmbedding()
-embeddings: list[np.ndarray] = embedding_model.embed(documents)
+# DNA embeddings
+dna_model = DNAEmbedding("PoetschLab/GROVER")
+dna_embeddings = list(dna_model.embed(["ATCGATCGATCG", "GCTAGCTAGCTA"]))
+
+# Protein embeddings
+protein_model = ProteinEmbedding("facebook/esm2_t12_35M_UR50D")
+protein_embeddings = list(protein_model.embed(["MKTVRQERLKS", "GKGDPKKPRGKM"]))
 ```
 
-## Usage with Qdrant
+## Why fastembed-bio?
 
-Installation with Qdrant Client in Python:
+- **Fast**: ONNX runtime for CPU inference, no GPU needed
+- **Lightweight**: Minimal dependencies, small model files
+- **Simple**: Clean API inspired by [fastembed](https://github.com/qdrant/fastembed)
+- **Biological focus**: DNA, protein, and (coming soon) single-cell embeddings
 
-```bash
-pip install qdrant-client[fastembed]
-```
+## Supported Models
 
-Might have to use ```pip install 'qdrant-client[fastembed]'``` on zsh.
+### DNA Embeddings
 
-```python
-from qdrant_client import QdrantClient
+| Model | Dimensions | Description |
+|-------|------------|-------------|
+| `PoetschLab/GROVER` | 768 | GROVER DNA foundation model |
 
-# Initialize the client
-client = QdrantClient(":memory:")  # Using an in-process Qdrant
+### Protein Embeddings
 
-# Prepare your documents, metadata, and IDs
-docs = ["Qdrant has Langchain integrations", "Qdrant also has Llama Index integrations"]
-metadata = [
-    {"source": "Langchain-docs"},
-    {"source": "Llama-index-docs"},
-]
-ids = [42, 2]
+| Model | Dimensions | Description |
+|-------|------------|-------------|
+| `facebook/esm2_t12_35M_UR50D` | 480 | ESM-2 35M parameters |
 
-client.add(
-    collection_name="demo_collection",
-    documents=docs,
-    metadata=metadata,
-    ids=ids
-)
+## Next Steps
 
-search_result = client.query(
-    collection_name="demo_collection",
-    query_text="This is a query document"
-)
-print(search_result)
-```
+- [DNA Embedding Quickstart](quickstart/dna.md) - Get started with DNA sequence embeddings
+- [Protein Embedding Quickstart](quickstart/protein.md) - Get started with protein sequence embeddings
+
+## Roadmap
+
+I'm actively expanding fastembed-bio. Here's where my mind is at for future model support:
+
+### DNA/RNA Models
+- [ ] Nucleotide Transformer v3 (species-conditioned embeddings)
+- [ ] Hyena DNA
+- [ ] Additional GROVER variants
+
+### Protein Models
+- [ ] ESM-2 larger variants (150M, 650M)
+- [ ] ESMFold embeddings
+
+### Single-Cell Models
+- [ ] Geneformer (scRNA-seq)
+- [ ] scGPT
+- [ ] Tahoe-x1
+
+### Other Modalities
+- [ ] ATAC-seq embeddings (Atacformer)
+- [ ] Multi-modal embeddings
+
+Want to contribute? Check out our [GitHub repository](https://github.com/nleroy917/fastembed-bio)!

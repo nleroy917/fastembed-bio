@@ -1,9 +1,11 @@
 import json
+
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Iterable, Sequence, Type
 
 import numpy as np
+
 from tokenizers import Tokenizer, pre_tokenizers, processors
 from tokenizers.models import WordLevel
 
@@ -29,7 +31,8 @@ supported_protein_models: list[DenseModelDescription] = [
 
 
 def load_protein_tokenizer(model_dir: Path, max_length: int = 1024) -> Tokenizer:
-    """Load a protein tokenizer from model directory using HuggingFace tokenizers.
+    """
+    Load a protein tokenizer from model directory using HuggingFace tokenizers.
 
     Attempts to load in order:
     1. tokenizer.json (standard HuggingFace fast tokenizer format)
@@ -145,7 +148,7 @@ class ProteinEmbeddingBase(ModelManagement[DenseModelDescription]):
     def get_embedding_size(cls, model_name: str) -> int:
         """
         Returns embedding size of the passed model.
-        
+
         Args:
             model_name: Name of the model
         """
@@ -366,7 +369,7 @@ class ProteinEmbedding(ProteinEmbeddingBase):
     Protein sequence embedding using ESM-2 and similar models.
 
     Example:
-        >>> from fastembed_bio.bio import ProteinEmbedding
+        >>> from fastembed_bio import ProteinEmbedding
         >>> model = ProteinEmbedding("facebook/esm2_t12_35M_UR50D")
         >>> embeddings = list(model.embed(["MKTVRQERLKS", "GKGDPKKPRGKM"]))
         >>> print(embeddings[0].shape)
