@@ -16,56 +16,15 @@ import json
 from pathlib import Path
 
 import torch
-import torch.nn as nn
 import numpy as np
 
 from transformers import AutoTokenizer, AutoModel
 
 
-class GroverEmbeddingWrapper(nn.Module):
-    """
-    A wrapper around GROVER's BertModel that outputs only embeddings.
-
-    GROVER is a BertForMaskedLM model, so we extract the BERT encoder
-    and return the last hidden state as embeddings.
-    """
-
-    def __init__(self, model):
-        super().__init__()
-        # GROVER is BertForMaskedLM, the encoder is in model.bert
-        self.bert = model.bert
-        self.config = model.config
-
-    def forward(
-        self,
-        input_ids: torch.LongTensor,
-        attention_mask: torch.LongTensor,
-    ) -> torch.Tensor:
-        """
-        Forward pass that returns only the embedding.
-
-        Args:
-            input_ids: Input token IDs of shape (B, L)
-            attention_mask: Attention mask of shape (B, L)
-
-        Returns:
-            Embedding tensor of shape (B, L, H)
-        """
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=None,
-            output_hidden_states=False,
-            output_attentions=False,
-            return_dict=True,
-        )
-        return outputs.last_hidden_state
-
-
 def convert_to_onnx(
     model_name: str,
     output_dir: str,
-    opset_version: int = 14,
+    opset_version: int = 18,
     max_length: int = 512,
 ) -> Path:
     """
@@ -106,13 +65,11 @@ def convert_to_onnx(
     print("Exporting to ONNX...")
     onnx_path = output_path / "model.onnx"
 
-    # create wrapper that outputs embeddings only
-    wrapper = GroverEmbeddingWrapper(model)
-    wrapper.eval()
+    model.eval()
 
     with torch.no_grad():
         torch.onnx.export(
-            wrapper,
+            model,
             (batch["input_ids"], batch["attention_mask"]),
             onnx_path,
             input_names=["input_ids", "attention_mask"],
@@ -169,7 +126,7 @@ def validate_onnx_model(
     batch = tokenizer([test_seq], return_tensors='pt', padding=True, truncation=True, max_length=512)
 
     with torch.no_grad():
-        pt_out = model.bert(
+        pt_out = model(
             input_ids=batch['input_ids'],
             attention_mask=batch['attention_mask'],
             return_dict=True,
@@ -205,8 +162,8 @@ def main():
     parser.add_argument(
         "--opset",
         type=int,
-        default=14,
-        help="ONNX opset version (default: 14)",
+        default=18,
+        help="ONNX opset version (default: 18)",
     )
     parser.add_argument(
         "--max-length",

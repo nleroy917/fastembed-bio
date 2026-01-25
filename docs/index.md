@@ -40,6 +40,7 @@ protein_embeddings = list(protein_model.embed(["MKTVRQERLKS", "GKGDPKKPRGKM"]))
 | Model | Dimensions | Description |
 |-------|------------|-------------|
 | `InstaDeepAI/NTv3_650M_post` | 1536 | Nucleotide Transformer v3, species-conditioned |
+| `PoetschLab/GROVER` | 768 | GROVER DNA foundation model |
 
 ### Protein Embeddings
 

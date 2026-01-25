@@ -140,3 +140,4 @@ docs/experimental/*.parquet
 docs/experimental/*.bin
 qdrant_storage/*
 experiments/models/*
+converted_models

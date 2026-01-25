@@ -4,30 +4,38 @@ icon: lucide/dna
 
 # DNA Embedding Quickstart
 
-Generate embeddings for DNA sequences using the Nucleotide Transformer v3 model.
+Generate embeddings for DNA sequences using foundation models like GROVER and Nucleotide Transformer v3.
+
+## Available Models
+
+| Model | Dimensions | Species Conditioning |
+|-------|------------|---------------------|
+| `PoetschLab/GROVER` | 768 | No |
+| `InstaDeepAI/NTv3_650M_post` | 1536 | Yes |
 
 ## Basic Usage
 
 ```python
 from fastembed_bio import DNAEmbedding
 
-# Initialize the model (downloads on first use)
+# GROVER - simple, no species needed
+model = DNAEmbedding("PoetschLab/GROVER")
+embeddings = list(model.embed(["ATCGATCGATCGATCG", "GCTAGCTAGCTAGCTA"]))
+print(f"Shape: {embeddings[0].shape}")  # (768,)
+
+# NTv3 - species-conditioned
 model = DNAEmbedding("InstaDeepAI/NTv3_650M_post")
-
-# Embed sequences
-sequences = ["ATCGATCGATCGATCG", "GCTAGCTAGCTAGCTA"]
-embeddings = list(model.embed(sequences))
-
+embeddings = list(model.embed(["ATCGATCGATCGATCG"], species="human"))
 print(f"Shape: {embeddings[0].shape}")  # (1536,)
 ```
 
-## Species-Conditioned Embeddings
+## Species-Conditioned Embeddings (NTv3)
 
-The NTv3 model supports species conditioning, which improves embedding quality for sequences from specific organisms.
+The NTv3 model supports species conditioning, which improves embedding quality for sequences from specific organisms. GROVER does not use species conditioning.
 
 ### Default Species
 
-By default, all sequences use `species="human"`:
+For NTv3, all sequences use `species="human"` by default:
 
 ```python
 # These are equivalent

@@ -58,27 +58,50 @@ def _normalize_dna_inputs(
 
 
 supported_dna_models: list[DenseModelDescription] = [
+    # DenseModelDescription(
+    #     model="InstaDeepAI/NTv3_650M_post",
+    #     dim=1536,
+    #     description="Nucleotide Transformer v3, 650M parameters, 1536 dimensions, species-conditioned DNA embeddings",
+    #     license="cc-by-nc-sa-4.0",
+    #     size_in_GB=2.6,
+    #     sources=ModelSource(hf="nleroy917/ntv3-650m-post-onnx"),
+    #     model_file="model.onnx",
+    #     additional_files=[
+    #         "vocab.json",
+    #         "tokenizer_config.json",
+    #         "special_tokens_map.json",
+    #         "species_config.json",
+    #         "model_config.json",
+    #         "model.onnx.data",
+    #     ],
+    # ),
     DenseModelDescription(
-        model="InstaDeepAI/NTv3_650M_post",
-        dim=1536,
-        description="Nucleotide Transformer v3, 650M parameters, 1536 dimensions, species-conditioned DNA embeddings",
-        license="cc-by-nc-sa-4.0",
-        size_in_GB=2.6,
-        sources=ModelSource(hf="nleroy917/ntv3-650m-post-onnx"),
+        model="PoetschLab/GROVER",
+        dim=768,
+        description="GROVER DNA foundation model, 768 dimensions, trained on human genome",
+        license="apache-2.0",
+        size_in_GB=0.33,
+        sources=ModelSource(hf="nleroy917/grover-onnx"),
         model_file="model.onnx",
         additional_files=[
-            "vocab.json",
+            "tokenizer.json",
             "tokenizer_config.json",
             "special_tokens_map.json",
-            "species_config.json",
             "model_config.json",
             "model.onnx.data",
         ],
     ),
 ]
 
+# models that require species conditioning
+SPECIES_CONDITIONED_MODELS = {"InstaDeepAI/NTv3_650M_post"}
 
-def load_dna_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokenizer:
+
+def load_dna_tokenizer(
+    model_dir: Path,
+    max_length: int = 6144,
+    requires_species: bool = False,
+) -> Tokenizer:
     """
     Load a DNA tokenizer from model directory.
 
@@ -88,7 +111,8 @@ def load_dna_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokenizer:
 
     Args:
         model_dir: Path to model directory containing tokenizer files
-        max_length: Maximum sequence length (default 6144, must be multiple of 128 for NTv3)
+        max_length: Maximum sequence length (default 6144)
+        requires_species: Whether the model requires species conditioning (affects padding)
 
     Returns:
         Configured Tokenizer instance
@@ -100,17 +124,28 @@ def load_dna_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokenizer:
     tokenizer_config_path = model_dir / "tokenizer_config.json"
     vocab_json_path = model_dir / "vocab.json"
 
-    # try to load tokenizer.json directly (preferred)
+    # read config for settings
+    pad_token = "[PAD]"
+    pad_token_id = 0
+    if tokenizer_config_path.exists():
+        with open(tokenizer_config_path) as f:
+            config = json.load(f)
+            config_max_length = config.get("model_max_length", max_length)
+            if config_max_length and config_max_length <= max_length:
+                max_length = config_max_length
+            pad_token = config.get("pad_token", pad_token)
+
+    # try to load tokenizer.json directly (preferred for GROVER and others)
     if tokenizer_json_path.exists():
         tokenizer = Tokenizer.from_file(str(tokenizer_json_path))
-        if tokenizer_config_path.exists():
-            with open(tokenizer_config_path) as f:
-                config = json.load(f)
-                config_max_length = config.get("model_max_length", max_length)
-                if config_max_length <= max_length:
-                    max_length = config_max_length
         tokenizer.enable_truncation(max_length=max_length)
-        tokenizer.enable_padding(pad_id=1, pad_token="<pad>", pad_to_multiple_of=128)
+
+        # NTv3-style models need padding to multiple of 128
+        if requires_species:
+            tokenizer.enable_padding(pad_id=1, pad_token="<pad>", pad_to_multiple_of=128)
+        else:
+            # standard padding for models like GROVER
+            tokenizer.enable_padding(pad_id=pad_token_id, pad_token=pad_token)
         return tokenizer
 
     # fall back to building from vocab.json (NTv3 style)
@@ -143,19 +178,20 @@ def load_dna_tokenizer(model_dir: Path, max_length: int = 6144) -> Tokenizer:
     return tokenizer
 
 
-def load_species_config(model_dir: Path) -> dict[str, Any]:
+def load_species_config(model_dir: Path) -> dict[str, Any] | None:
     """
-    Load species configuration from model directory.
+    Load species configuration from model directory if it exists.
 
     Args:
         model_dir: Path to model directory
 
     Returns:
-        Dictionary with species_to_id, id_to_species, and supported_species
+        Dictionary with species_to_id, id_to_species, and supported_species,
+        or None if the model doesn't use species conditioning.
     """
     species_config_path = model_dir / "species_config.json"
     if not species_config_path.exists():
-        raise ValueError(f"Could not find species_config.json in {model_dir}")
+        return None
 
     with open(species_config_path) as f:
         return json.load(f)
@@ -266,12 +302,14 @@ class OnnxDNAModel(OnnxModel[NumpyArray]):
         super().__init__()
         self.tokenizer: Tokenizer | None = None
         self.species_config: dict[str, Any] | None = None
+        self._requires_species: bool = False
 
     def _load_onnx_model(
         self,
         model_dir: Path,
         model_file: str,
         threads: int | None,
+        model_name: str = "",
         providers: Sequence[OnnxProvider] | None = None,
         cuda: bool | Device = Device.AUTO,
         device_id: int | None = None,
@@ -286,7 +324,9 @@ class OnnxDNAModel(OnnxModel[NumpyArray]):
             device_id=device_id,
             extra_session_options=extra_session_options,
         )
-        self.tokenizer = load_dna_tokenizer(model_dir)
+        # check if this model requires species conditioning
+        self._requires_species = model_name in SPECIES_CONDITIONED_MODELS
+        self.tokenizer = load_dna_tokenizer(model_dir, requires_species=self._requires_species)
         self.species_config = load_species_config(model_dir)
 
     def _get_species_id(self, species: str) -> int:
@@ -324,7 +364,8 @@ class OnnxDNAModel(OnnxModel[NumpyArray]):
         Args:
             sequences: List of DNA sequences (A, T, C, G, N characters)
             species_list: List of species names, one per sequence. If None,
-                         defaults to "human" for all sequences.
+                         defaults to "human" for all sequences. Ignored for
+                         models that don't support species conditioning.
 
         Returns:
             OnnxOutputContext containing model output and inputs
@@ -334,30 +375,32 @@ class OnnxDNAModel(OnnxModel[NumpyArray]):
         # normalize sequences to uppercase
         sequences = [seq.upper() for seq in sequences]
 
-        # default species list if not provided
-        if species_list is None:
-            species_list = ["human"] * len(sequences)
-
-        if len(species_list) != len(sequences):
-            raise ValueError(
-                f"species_list length ({len(species_list)}) must match "
-                f"sequences length ({len(sequences)})"
-            )
-
         # tokenize
         encoded = self.tokenizer.encode_batch(sequences)
         input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
         attention_mask = np.array([e.attention_mask for e in encoded], dtype=np.int64)
 
-        # get species IDs for each sequence
-        species_ids = np.array(
-            [self._get_species_id(sp) for sp in species_list], dtype=np.int64
-        )
-
+        # build onnx input based on model requirements
         onnx_input: dict[str, NumpyArray] = {
             "input_ids": input_ids,
-            "species_ids": species_ids,
+            "attention_mask": attention_mask,
         }
+
+        # add species IDs only for models that require it
+        if self._requires_species:
+            if species_list is None:
+                species_list = ["human"] * len(sequences)
+
+            if len(species_list) != len(sequences):
+                raise ValueError(
+                    f"species_list length ({len(species_list)}) must match "
+                    f"sequences length ({len(sequences)})"
+                )
+
+            species_ids = np.array(
+                [self._get_species_id(sp) for sp in species_list], dtype=np.int64
+            )
+            onnx_input["species_ids"] = species_ids
 
         model_output = self.model.run(self.ONNX_OUTPUT_NAMES, onnx_input)  # type: ignore[union-attr]
 
@@ -440,6 +483,7 @@ class OnnxDNAEmbedding(DNAEmbeddingBase, OnnxDNAModel):
             model_dir=self._model_dir,
             model_file=self.model_description.model_file,
             threads=self.threads,
+            model_name=self.model_name,
             providers=self.providers,
             cuda=self.cuda,
             device_id=self.device_id,
@@ -487,12 +531,21 @@ class OnnxDNAEmbedding(DNAEmbeddingBase, OnnxDNAModel):
             )
 
     def list_supported_species(self) -> list[str]:
-        """Returns list of supported species for conditioning."""
-        if self.species_config is None:
-            # Load species config if not yet loaded
+        """
+        Returns list of supported species for conditioning.
+
+        Returns an empty list for models that don't support species conditioning.
+        """
+        if not hasattr(self, "_requires_species"):
+            # model not loaded yet
             self.load_onnx_model()
+
+        if not self._requires_species:
+            return []
+
         if self.species_config is None:
-            raise ValueError("Could not load species config")
+            return []
+
         return self.species_config.get("supported_species", [])
 
     @classmethod
